@@ -22,3 +22,5 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(
             provider.session.get.call_args.kwargs["params"]["adjusted"], "true"
         )
+        self.assertNotIn("apiKey", provider.session.get.call_args.kwargs["params"])
+        self.assertEqual(provider.session.headers["Authorization"], "Bearer secret")
