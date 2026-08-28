@@ -13,6 +13,8 @@ Within the latest 60 valid daily RSI observations:
    steps after the cross. The cross day counts as step zero.
 3. From that first 60+ reading through the latest reading, RSI never falls
    below 55. Exactly 55 is accepted.
+4. The latest RSI must be at or below 70. Combined with the hold rule, the
+   latest RSI is therefore between 55 and 70 inclusive.
 
 If more than one cross exists, the most recent qualifying sequence wins.
 
