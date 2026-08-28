@@ -55,3 +55,9 @@ class SignalTests(unittest.TestCase):
         self.assertIsNotNone(match)
         assert match is not None
         self.assertEqual(match.days_to_60, 0)
+
+    def test_latest_rsi_above_70_is_excluded(self) -> None:
+        self.assertIsNone(find_signal(series([39, 41, 60, 69, 70.01])))
+
+    def test_latest_rsi_exactly_70_is_allowed(self) -> None:
+        self.assertIsNotNone(find_signal(series([39, 41, 60, 55, 70])))
