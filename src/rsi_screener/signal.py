@@ -21,6 +21,7 @@ def find_signal(
     cross_level: float = 40.0,
     target_level: float = 60.0,
     hold_level: float = 55.0,
+    max_latest_rsi: float = 70.0,
 ) -> SignalMatch | None:
     """Find the most recent qualifying momentum sequence.
 
@@ -32,6 +33,8 @@ def find_signal(
         return None
     window = list(dated_rsi[-lookback:])
     if len(window) < 2:
+        return None
+    if window[-1][1] > max_latest_rsi:
         return None
 
     for cross_index in range(len(window) - 1, 0, -1):
