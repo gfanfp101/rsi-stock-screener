@@ -23,6 +23,7 @@ class MassiveProvider:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
+        self.session.headers.update({"Authorization": f"Bearer {api_key}"})
 
     def daily_market(self, day: date) -> list[DailyBar]:
         url = (
@@ -31,7 +32,7 @@ class MassiveProvider:
         )
         response = self.session.get(
             url,
-            params={"adjusted": "true", "include_otc": "false", "apiKey": self.api_key},
+            params={"adjusted": "true", "include_otc": "false"},
             timeout=self.timeout,
         )
         response.raise_for_status()
