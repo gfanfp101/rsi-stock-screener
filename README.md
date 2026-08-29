@@ -10,7 +10,7 @@ Wilder RSI(14), and exports qualifying tickers as CSV.
 2. Calculate a 14-day simple moving average of RSI(14) for every trading day.
 3. Across the latest 14 trading days, that RSI average must never decrease.
    Equal consecutive values are accepted.
-4. The latest raw RSI(14) must be strictly above 65.
+4. The latest raw RSI(14) must be strictly above 65 and at or below 70.
 5. Rank matches by the average daily increase in the RSI average across the
    14-day trend window, largest first.
 
