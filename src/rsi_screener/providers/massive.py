@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import time
 
 import requests
 
@@ -54,7 +55,7 @@ class MassiveProvider:
             if all(key in item for key in ("T", "o", "h", "l", "c", "v"))
         ]
 
-    def financial_ratios(self) -> list[StockMetadata]:
+    def financial_ratios(self, request_delay: float = 0.0) -> list[StockMetadata]:
         url = f"{self.base_url}/stocks/financials/v1/ratios"
         params = {"limit": 100, "sort": "ticker.asc"}
         rows: list[StockMetadata] = []
@@ -70,12 +71,40 @@ class MassiveProvider:
                 ))
             url = payload.get("next_url")
             params = None
+            if url and request_delay:
+                time.sleep(request_delay)
         return rows
 
     def classification(self, ticker: str) -> tuple[str | None, str | None]:
+        item = self.ticker_details(ticker)
+        return item.sector, item.industry
+
+    def ticker_details(self, ticker: str) -> StockMetadata:
         response = self.session.get(
             f"{self.base_url}/v3/reference/tickers/{ticker}", timeout=self.timeout
         )
         response.raise_for_status()
         item = response.json().get("results", {})
-        return sector_from_sic(item.get("sic_code")), item.get("sic_description")
+        return StockMetadata(
+            ticker=ticker,
+            market_cap=item.get("market_cap"),
+            sector=sector_from_sic(item.get("sic_code")),
+            industry=item.get("sic_description"),
+            cik=item.get("cik"),
+        )
+
+    def active_common_tickers(self) -> set[str]:
+        url = f"{self.base_url}/v3/reference/tickers"
+        params = {
+            "market": "stocks", "active": "true", "type": "CS",
+            "limit": 1000, "sort": "ticker",
+        }
+        tickers: set[str] = set()
+        while url:
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            payload = response.json()
+            tickers.update(item["ticker"] for item in payload.get("results", []))
+            url = payload.get("next_url")
+            params = None
+        return tickers
