@@ -11,10 +11,12 @@ from rsi_screener.metadata import StockMetadata
 @dataclass(frozen=True)
 class ScreenResult:
     ticker: str
-    crossed_on: date
-    reached_60_on: date
+    period_start: date
+    period_end: date
     latest_rsi: float
-    days_to_60: int
+    start_average_rsi: float
+    latest_average_rsi: float
+    average_rsi_change: float
     market_cap: float | None = None
     pe_ratio: float | None = None
     sector: str | None = None
@@ -38,20 +40,20 @@ def screen_histories(
         meta = (metadata or {}).get(ticker)
         if min_market_cap is not None and (not meta or meta.market_cap is None or meta.market_cap < min_market_cap):
             continue
-        if match and match.crossed_on and match.reached_60_on:
+        if match:
             results.append(
                 ScreenResult(
                     ticker=ticker,
-                    crossed_on=match.crossed_on,
-                    reached_60_on=match.reached_60_on,
+                    period_start=match.period_start,
+                    period_end=match.period_end,
                     latest_rsi=match.latest_rsi,
-                    days_to_60=match.days_to_60,
+                    start_average_rsi=match.start_average_rsi,
+                    latest_average_rsi=match.latest_average_rsi,
+                    average_rsi_change=match.average_rsi_change,
                     market_cap=meta.market_cap if meta else None,
                     pe_ratio=meta.pe_ratio if meta else None,
                     sector=meta.sector if meta else None,
                     industry=meta.industry if meta else None,
                 )
             )
-    if min_market_cap is not None:
-        return sorted(results, key=lambda item: (-(item.market_cap or 0), item.ticker))
-    return sorted(results, key=lambda item: (-item.latest_rsi, item.ticker))
+    return sorted(results, key=lambda item: (-item.average_rsi_change, item.ticker))
