@@ -58,16 +58,17 @@ def screen(args: argparse.Namespace) -> None:
     try:
         writer = csv.writer(output)
         writer.writerow(["ticker", "market_cap", "pe_ratio", "sector", "industry",
-                         "crossed_on", "reached_60_on", "days_to_60", "latest_rsi"])
+                         "period_start", "period_end", "latest_rsi",
+                         "start_average_rsi", "latest_average_rsi", "average_rsi_change"])
         for item in results:
             writer.writerow([
                 item.ticker, f"{item.market_cap:.0f}" if item.market_cap else "",
                 f"{item.pe_ratio:.2f}" if item.pe_ratio else "",
                 item.sector or "", item.industry or "",
-                item.crossed_on.isoformat(),
-                item.reached_60_on.isoformat(),
-                item.days_to_60,
+                item.period_start.isoformat(), item.period_end.isoformat(),
                 f"{item.latest_rsi:.2f}",
+                f"{item.start_average_rsi:.2f}", f"{item.latest_average_rsi:.2f}",
+                f"{item.average_rsi_change:.4f}",
             ])
     finally:
         if output is not sys.stdout:
