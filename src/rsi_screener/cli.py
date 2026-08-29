@@ -5,6 +5,8 @@ import csv
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from requests import HTTPError
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -83,18 +85,26 @@ def refresh_metadata(args: argparse.Namespace) -> None:
     delay = 60.0 / rpm if rpm > 0 else 0.0
     with MetadataStore(args.metadata_database) as store:
         if args.force or not store.fundamentals_are_fresh(max_age_days=7):
-            rows = provider.financial_ratios()
-            print(f"Saved ratios for {store.save_ratios(rows):,} tickers")
+            try:
+                rows = provider.financial_ratios(request_delay=delay)
+            except HTTPError as error:
+                if error.response is None or error.response.status_code != 403 or not args.tickers_file:
+                    raise
+                print("Ratios entitlement unavailable; using ticker details for market cap.")
+            else:
+                print(f"Saved ratios for {store.save_ratios(rows):,} tickers")
         if args.tickers_file:
             with open(args.tickers_file, newline="") as source:
                 tickers = [row["ticker"] for row in csv.DictReader(source)]
+            active_common = provider.active_common_tickers()
+            tickers = [ticker for ticker in tickers if ticker in active_common]
             missing = store.missing_classifications(tickers)
-            for index, ticker in enumerate(missing, 1):
-                sector, industry = provider.classification(ticker)
-                store.save_classification(ticker, sector, industry)
-                print(f"Saved classification for {ticker} ({index}/{len(missing)})")
-                if index < len(missing) and delay:
-                    time.sleep(delay)
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                futures = {executor.submit(provider.ticker_details, ticker): ticker for ticker in missing}
+                for index, future in enumerate(as_completed(futures), 1):
+                    details = future.result()
+                    store.save_details([details])
+                    print(f"Saved details for {details.ticker} ({index}/{len(missing)})")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -126,6 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
     metadata_parser = commands.add_parser("metadata-refresh", help="refresh weekly fundamentals cache")
     metadata_parser.add_argument("--tickers-file")
     metadata_parser.add_argument("--force", action="store_true")
+    metadata_parser.add_argument("--workers", type=int, default=8)
     metadata_parser.set_defaults(func=refresh_metadata)
     return parser
 
