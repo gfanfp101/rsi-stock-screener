@@ -61,3 +61,9 @@ class SignalTests(unittest.TestCase):
 
     def test_latest_rsi_exactly_70_is_allowed(self) -> None:
         self.assertIsNotNone(find_signal(series([39, 41, 60, 55, 70])))
+
+    def test_fails_if_rsi_exceeds_70_after_target_then_returns_below(self) -> None:
+        self.assertIsNone(find_signal(series([39, 41, 60, 71, 65])))
+
+    def test_exactly_70_during_hold_is_allowed(self) -> None:
+        self.assertIsNotNone(find_signal(series([39, 41, 60, 70, 65])))
