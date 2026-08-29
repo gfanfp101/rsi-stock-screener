@@ -34,9 +34,6 @@ def find_signal(
     window = list(dated_rsi[-lookback:])
     if len(window) < 2:
         return None
-    if window[-1][1] > max_latest_rsi:
-        return None
-
     for cross_index in range(len(window) - 1, 0, -1):
         previous = window[cross_index - 1][1]
         current = window[cross_index][1]
@@ -55,7 +52,10 @@ def find_signal(
         )
         if target_index is None:
             continue
-        if all(value >= hold_level for _, value in window[target_index:]):
+        if all(
+            hold_level <= value <= max_latest_rsi
+            for _, value in window[target_index:]
+        ):
             return SignalMatch(
                 crossed_on=window[cross_index][0],
                 reached_60_on=window[target_index][0],
