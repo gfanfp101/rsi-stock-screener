@@ -12,6 +12,7 @@ from pathlib import Path
 
 from rsi_screener.providers import MassiveProvider
 from rsi_screener.metadata import MetadataStore
+from rsi_screener.history import ScreenHistoryStore
 from rsi_screener.screener import screen_histories
 from rsi_screener.storage import PriceStore
 
@@ -125,6 +126,37 @@ def refresh_metadata(args: argparse.Namespace) -> None:
                     print(f"Saved details for {details.ticker} ({index}/{len(missing)})")
 
 
+def _write_results(path: Path, results: list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(["rank", "ticker", "market_cap", "pe_ratio", "sector", "industry",
+                         "period_start", "period_end", "latest_rsi", "start_average_rsi",
+                         "latest_average_rsi", "average_rsi_change"])
+        for rank, item in enumerate(results, 1):
+            writer.writerow([rank, item.ticker,
+                f"{item.market_cap:.0f}" if item.market_cap else "",
+                f"{item.pe_ratio:.2f}" if item.pe_ratio else "", item.sector or "",
+                item.industry or "", item.period_start.isoformat(), item.period_end.isoformat(),
+                f"{item.latest_rsi:.2f}", f"{item.start_average_rsi:.2f}",
+                f"{item.latest_average_rsi:.2f}", f"{item.average_rsi_change:.4f}"])
+
+
+def backfill_history(args: argparse.Namespace) -> None:
+    with MetadataStore(args.metadata_database) as metadata_store:
+        metadata = metadata_store.all()
+    with PriceStore(args.database) as price_store, ScreenHistoryStore(args.history_database) as history:
+        days = price_store.trading_days(args.days)
+        for day in days:
+            results = screen_histories(
+                price_store.histories_as_of(day, limit=args.history), metadata=metadata,
+                min_market_cap=args.min_market_cap,
+            )
+            _write_results(Path(args.directory) / f"{day.isoformat()}.csv", results)
+            history.replace_day(day, results)
+            print(f"{day}: saved {len(results)} matches")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Daily RSI momentum stock screener")
     parser.add_argument("--database", default="data/prices.sqlite3")
@@ -156,6 +188,13 @@ def build_parser() -> argparse.ArgumentParser:
     metadata_parser.add_argument("--force", action="store_true")
     metadata_parser.add_argument("--workers", type=int, default=8)
     metadata_parser.set_defaults(func=refresh_metadata)
+    history_parser = commands.add_parser("history", help="backfill date-stamped screen results")
+    history_parser.add_argument("--days", type=int, default=30)
+    history_parser.add_argument("--history", type=int, default=160)
+    history_parser.add_argument("--min-market-cap", type=float, default=1_000_000_000)
+    history_parser.add_argument("--directory", default="data/screen_history")
+    history_parser.add_argument("--history-database", default="data/screen_history.sqlite3")
+    history_parser.set_defaults(func=backfill_history)
     return parser
 
 
