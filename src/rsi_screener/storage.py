@@ -100,15 +100,28 @@ class PriceStore:
         return len(rows)
 
     def histories(self, limit: int = 160) -> dict[str, list[tuple[date, float]]]:
+        return self.histories_as_of(None, limit=limit)
+
+    def trading_days(self, limit: int) -> list[date]:
         rows = self.connection.execute(
-            """
+            "SELECT DISTINCT day FROM daily_prices ORDER BY day DESC LIMIT ?", (limit,)
+        )
+        return sorted(date.fromisoformat(row[0]) for row in rows)
+
+    def histories_as_of(
+        self, end: date | None, limit: int = 160,
+    ) -> dict[str, list[tuple[date, float]]]:
+        where = "WHERE day <= ?" if end else ""
+        parameters: tuple[object, ...] = (end.isoformat(), limit) if end else (limit,)
+        rows = self.connection.execute(
+            f"""
             SELECT ticker, day, close FROM (
               SELECT ticker, day, close,
                      ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY day DESC) n
-              FROM daily_prices
+              FROM daily_prices {where}
             ) WHERE n <= ? ORDER BY ticker, day
             """,
-            (limit,),
+            parameters,
         )
         histories: dict[str, list[tuple[date, float]]] = {}
         for ticker, day, close in rows:
