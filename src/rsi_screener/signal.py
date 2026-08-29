@@ -21,12 +21,17 @@ def find_signal(
     trend_days: int = 14,
     average_period: int = 14,
     minimum_latest_rsi: float = 65.0,
+    maximum_latest_rsi: float = 70.0,
 ) -> SignalMatch | None:
     """Match a non-decreasing 14-day trend in the SMA of daily RSI values."""
     if trend_days < 2 or average_period < 1:
         raise ValueError("trend_days must be at least 2 and average_period positive")
     required = average_period + trend_days - 1
-    if len(dated_rsi) < required or dated_rsi[-1][1] <= minimum_latest_rsi:
+    if (
+        len(dated_rsi) < required
+        or dated_rsi[-1][1] <= minimum_latest_rsi
+        or dated_rsi[-1][1] > maximum_latest_rsi
+    ):
         return None
 
     source = list(dated_rsi[-required:])
