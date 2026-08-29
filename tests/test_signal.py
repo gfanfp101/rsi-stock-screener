@@ -30,6 +30,10 @@ class SignalTests(unittest.TestCase):
         self.assertIsNone(find_signal(series([65.0] * 27)))
         self.assertIsNotNone(find_signal(series([65.01] * 27)))
 
+    def test_latest_rsi_must_not_exceed_70(self) -> None:
+        self.assertIsNotNone(find_signal(series([70.0] * 27)))
+        self.assertIsNone(find_signal(series([70.01] * 27)))
+
     def test_requires_enough_history_for_fourteen_averages(self) -> None:
         self.assertIsNone(find_signal(series([66.0] * 26)))
 
