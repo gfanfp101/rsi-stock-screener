@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from rsi_screener.providers import MassiveProvider
+from rsi_screener.metadata import MetadataStore
 from rsi_screener.screener import screen_histories
 from rsi_screener.storage import PriceStore
 
@@ -42,15 +43,25 @@ def fetch(args: argparse.Namespace) -> None:
 
 
 def screen(args: argparse.Namespace) -> None:
+    metadata = None
+    if args.min_market_cap is not None:
+        with MetadataStore(args.metadata_database) as metadata_store:
+            metadata = metadata_store.all()
     with PriceStore(args.database) as store:
-        results = screen_histories(store.histories(limit=args.history))
+        results = screen_histories(
+            store.histories(limit=args.history), metadata=metadata,
+            min_market_cap=args.min_market_cap,
+        )
     output = sys.stdout if args.output == "-" else open(args.output, "w", newline="")
     try:
         writer = csv.writer(output)
-        writer.writerow(["ticker", "crossed_on", "reached_60_on", "days_to_60", "latest_rsi"])
+        writer.writerow(["ticker", "market_cap", "pe_ratio", "sector", "industry",
+                         "crossed_on", "reached_60_on", "days_to_60", "latest_rsi"])
         for item in results:
             writer.writerow([
-                item.ticker,
+                item.ticker, f"{item.market_cap:.0f}" if item.market_cap else "",
+                f"{item.pe_ratio:.2f}" if item.pe_ratio else "",
+                item.sector or "", item.industry or "",
                 item.crossed_on.isoformat(),
                 item.reached_60_on.isoformat(),
                 item.days_to_60,
@@ -63,9 +74,33 @@ def screen(args: argparse.Namespace) -> None:
         print(f"Wrote {len(results)} matches to {args.output}")
 
 
+def refresh_metadata(args: argparse.Namespace) -> None:
+    provider = MassiveProvider(
+        os.environ.get("MASSIVE_API_KEY", ""),
+        base_url=os.environ.get("MASSIVE_BASE_URL", "https://api.massive.com"),
+    )
+    rpm = float(os.environ.get("MASSIVE_REQUESTS_PER_MINUTE", "5"))
+    delay = 60.0 / rpm if rpm > 0 else 0.0
+    with MetadataStore(args.metadata_database) as store:
+        if args.force or not store.fundamentals_are_fresh(max_age_days=7):
+            rows = provider.financial_ratios()
+            print(f"Saved ratios for {store.save_ratios(rows):,} tickers")
+        if args.tickers_file:
+            with open(args.tickers_file, newline="") as source:
+                tickers = [row["ticker"] for row in csv.DictReader(source)]
+            missing = store.missing_classifications(tickers)
+            for index, ticker in enumerate(missing, 1):
+                sector, industry = provider.classification(ticker)
+                store.save_classification(ticker, sector, industry)
+                print(f"Saved classification for {ticker} ({index}/{len(missing)})")
+                if index < len(missing) and delay:
+                    time.sleep(delay)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Daily RSI momentum stock screener")
     parser.add_argument("--database", default="data/prices.sqlite3")
+    parser.add_argument("--metadata-database", default="data/metadata.sqlite3")
     commands = parser.add_subparsers(dest="command", required=True)
     fetch_parser = commands.add_parser("fetch", help="download grouped daily market bars")
     fetch_parser.add_argument("--end", default=date.today().isoformat())
@@ -74,18 +109,24 @@ def build_parser() -> argparse.ArgumentParser:
     screen_parser = commands.add_parser("screen", help="screen locally cached prices")
     screen_parser.add_argument("--history", type=int, default=160)
     screen_parser.add_argument("--output", default="-")
+    screen_parser.add_argument("--min-market-cap", type=float)
     screen_parser.set_defaults(func=screen)
     run_parser = commands.add_parser("run", help="fetch, then screen")
     run_parser.add_argument("--end", default=date.today().isoformat())
     run_parser.add_argument("--days", type=int, default=120)
     run_parser.add_argument("--history", type=int, default=160)
     run_parser.add_argument("--output", default="matches.csv")
+    run_parser.add_argument("--min-market-cap", type=float, default=1_000_000_000)
 
     def run(args: argparse.Namespace) -> None:
         fetch(args)
         screen(args)
 
     run_parser.set_defaults(func=run)
+    metadata_parser = commands.add_parser("metadata-refresh", help="refresh weekly fundamentals cache")
+    metadata_parser.add_argument("--tickers-file")
+    metadata_parser.add_argument("--force", action="store_true")
+    metadata_parser.set_defaults(func=refresh_metadata)
     return parser
 
 
