@@ -7,59 +7,41 @@ from typing import Sequence
 
 @dataclass(frozen=True)
 class SignalMatch:
-    crossed_on: date | None
-    reached_60_on: date | None
+    period_start: date
+    period_end: date
     latest_rsi: float
-    days_to_60: int
+    start_average_rsi: float
+    latest_average_rsi: float
+    average_rsi_change: float
 
 
 def find_signal(
     dated_rsi: Sequence[tuple[date, float]],
     *,
-    lookback: int = 60,
-    max_days_to_target: int = 30,
-    cross_level: float = 40.0,
-    target_level: float = 60.0,
-    hold_level: float = 55.0,
-    max_latest_rsi: float = 70.0,
+    trend_days: int = 14,
+    average_period: int = 14,
+    minimum_latest_rsi: float = 65.0,
 ) -> SignalMatch | None:
-    """Find the most recent qualifying momentum sequence.
+    """Match a non-decreasing 14-day trend in the SMA of daily RSI values."""
+    if trend_days < 2 or average_period < 1:
+        raise ValueError("trend_days must be at least 2 and average_period positive")
+    required = average_period + trend_days - 1
+    if len(dated_rsi) < required or dated_rsi[-1][1] <= minimum_latest_rsi:
+        return None
 
-    A cross is `previous <= cross_level` and `current > cross_level`. The first
-    target reading after that cross must occur within max_days_to_target index
-    steps, and every reading from the target through the latest must hold.
-    """
-    if not dated_rsi:
+    source = list(dated_rsi[-required:])
+    averages = [
+        sum(value for _, value in source[index:index + average_period]) / average_period
+        for index in range(trend_days)
+    ]
+    if any(current < previous for previous, current in zip(averages, averages[1:])):
         return None
-    window = list(dated_rsi[-lookback:])
-    if len(window) < 2:
-        return None
-    for cross_index in range(len(window) - 1, 0, -1):
-        previous = window[cross_index - 1][1]
-        current = window[cross_index][1]
-        if not (previous <= cross_level < current):
-            continue
-        last_target_index = min(
-            len(window) - 1, cross_index + max_days_to_target
-        )
-        target_index = next(
-            (
-                index
-                for index in range(cross_index, last_target_index + 1)
-                if window[index][1] >= target_level
-            ),
-            None,
-        )
-        if target_index is None:
-            continue
-        if all(
-            hold_level <= value <= max_latest_rsi
-            for _, value in window[target_index:]
-        ):
-            return SignalMatch(
-                crossed_on=window[cross_index][0],
-                reached_60_on=window[target_index][0],
-                latest_rsi=window[-1][1],
-                days_to_60=target_index - cross_index,
-            )
-    return None
+
+    return SignalMatch(
+        period_start=source[average_period - 1][0],
+        period_end=source[-1][0],
+        latest_rsi=source[-1][1],
+        start_average_rsi=averages[0],
+        latest_average_rsi=averages[-1],
+        average_rsi_change=(averages[-1] - averages[0]) / (trend_days - 1),
+    )
