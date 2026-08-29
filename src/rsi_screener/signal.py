@@ -35,6 +35,9 @@ def find_signal(
         return None
 
     source = list(dated_rsi[-required:])
+    trend_rsi = source[-trend_days:]
+    if any(value > maximum_latest_rsi for _, value in trend_rsi):
+        return None
     averages = [
         sum(value for _, value in source[index:index + average_period]) / average_period
         for index in range(trend_days)
