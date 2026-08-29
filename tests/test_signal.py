@@ -34,6 +34,11 @@ class SignalTests(unittest.TestCase):
         self.assertIsNotNone(find_signal(series([70.0] * 27)))
         self.assertIsNone(find_signal(series([70.01] * 27)))
 
+    def test_rejects_rsi_above_70_anywhere_in_trend_window(self) -> None:
+        values = list(range(40, 67))
+        values[-5] = 70.01
+        self.assertIsNone(find_signal(series(values)))
+
     def test_requires_enough_history_for_fourteen_averages(self) -> None:
         self.assertIsNone(find_signal(series([66.0] * 26)))
 
