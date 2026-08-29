@@ -6,17 +6,13 @@ Wilder RSI(14), and exports qualifying tickers as CSV.
 
 ## Signal definition
 
-Within the latest 60 valid daily RSI observations:
-
-1. RSI crosses above 40 (`previous <= 40` and `current > 40`).
-2. The first RSI reading at or above 60 occurs no more than 30 trading-day
-   steps after the cross. The cross day counts as step zero.
-3. From that first 60+ reading through the latest reading, RSI never falls
-   below 55. Exactly 55 is accepted.
-4. From the first 60+ reading through the screening date, every RSI reading
-   must remain between 55 and 70 inclusive.
-
-If more than one cross exists, the most recent qualifying sequence wins.
+1. Calculate daily Wilder RSI(14).
+2. Calculate a 14-day simple moving average of RSI(14) for every trading day.
+3. Across the latest 14 trading days, that RSI average must never decrease.
+   Equal consecutive values are accepted.
+4. The latest raw RSI(14) must be strictly above 65.
+5. Rank matches by the average daily increase in the RSI average across the
+   14-day trend window, largest first.
 
 ## Data architecture
 
