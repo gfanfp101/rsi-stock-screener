@@ -91,6 +91,18 @@ class MetadataStore:
             (ticker, sector, industry, now),
         ); self.connection.commit()
 
+    def save_details(self, rows: list[StockMetadata]) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        self.connection.executemany(
+            """INSERT INTO stock_metadata(ticker, market_cap, sector, industry, cik, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(ticker) DO UPDATE SET
+            market_cap=excluded.market_cap, sector=excluded.sector,
+            industry=excluded.industry, cik=excluded.cik, updated_at=excluded.updated_at""",
+            [(r.ticker, r.market_cap, r.sector, r.industry, r.cik, now) for r in rows],
+        )
+        self.connection.commit()
+        return len(rows)
+
     def missing_classifications(self, tickers: list[str]) -> list[str]:
         if not tickers: return []
         found = {row[0] for row in self.connection.execute(
