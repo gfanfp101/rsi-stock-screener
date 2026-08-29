@@ -24,6 +24,11 @@ behind `DataProvider`, so another vendor can be added without changing RSI,
 storage, or screening logic. Downloaded bars are cached; repeat runs skip dates
 already in SQLite.
 
+Every fetch also checks for missing weekdays. If scheduled runs were missed
+because the computer was asleep or offline, the next successful run downloads
+each gap from the last stored date through the requested end date. Attempted
+market holidays are recorded with zero bars so they are not retried forever.
+
 The default fetch rate is five requests per minute to suit low-cost access.
 Confirm the limits and historical access of your own plan. The initial 120-day
 backfill can therefore take a while; daily updates need only one new request.
