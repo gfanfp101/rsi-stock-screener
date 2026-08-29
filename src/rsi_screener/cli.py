@@ -26,6 +26,16 @@ def _business_days(end: date, count: int) -> list[date]:
     return list(reversed(days))
 
 
+def _weekdays_between(start: date, end: date) -> list[date]:
+    days: list[date] = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            days.append(current)
+        current += timedelta(days=1)
+    return days
+
+
 def fetch(args: argparse.Namespace) -> None:
     provider = MassiveProvider(
         os.environ.get("MASSIVE_API_KEY", ""),
@@ -34,11 +44,18 @@ def fetch(args: argparse.Namespace) -> None:
     rpm = float(os.environ.get("MASSIVE_REQUESTS_PER_MINUTE", "5"))
     delay = 60.0 / rpm if rpm > 0 else 0.0
     with PriceStore(args.database) as store:
-        requested = _business_days(date.fromisoformat(args.end), args.days)
+        end = date.fromisoformat(args.end)
+        baseline = _business_days(end, args.days)
+        latest = store.latest_day()
+        start = baseline[0]
+        if latest is not None and latest + timedelta(days=1) < start:
+            start = latest + timedelta(days=1)
+        requested = _weekdays_between(start, end)
         pending = [day for day in requested if not store.has_day(day)]
         for number, day in enumerate(pending, 1):
             bars = provider.daily_market(day)
             saved = store.save(bars)
+            store.mark_day_downloaded(day, saved)
             print(f"{day}: saved {saved:,} bars ({number}/{len(pending)})")
             if number < len(pending) and delay:
                 time.sleep(delay)
