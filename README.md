@@ -71,6 +71,25 @@ Fetch missing days and write matches in one command:
 rsi-screener run --days 120 --output matches.csv
 ```
 
+## Weekly fundamentals and market-cap filter
+
+Fundamentals are stored separately in `data/metadata.sqlite3`. The Massive
+Financials & Ratios Expansion is required. Refresh market cap and trailing P/E
+weekly, then screen for companies worth at least $1 billion. Results are ranked
+by market cap, descending:
+
+```bash
+rsi-screener metadata-refresh
+rsi-screener screen --min-market-cap 1000000000 --output matches.csv
+```
+
+Sector and industry classifications change infrequently. Enrich only current
+matches, and the cache will skip tickers already classified:
+
+```bash
+rsi-screener metadata-refresh --tickers-file matches.csv
+```
+
 Use `--database path/to/prices.sqlite3` before the subcommand to choose another
 database. Set `MASSIVE_REQUESTS_PER_MINUTE` if your plan permits a different
 rate, or `MASSIVE_BASE_URL` for a compatible gateway.
