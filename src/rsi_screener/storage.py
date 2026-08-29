@@ -41,6 +41,15 @@ class PriceStore:
             "CREATE INDEX IF NOT EXISTS idx_prices_ticker_day "
             "ON daily_prices(ticker, day)"
         )
+        self.connection.execute(
+            "CREATE TABLE IF NOT EXISTS downloaded_days ("
+            "day TEXT PRIMARY KEY, bar_count INTEGER NOT NULL)"
+        )
+        self.connection.execute(
+            "INSERT OR IGNORE INTO downloaded_days(day, bar_count) "
+            "SELECT day, COUNT(*) FROM daily_prices GROUP BY day"
+        )
+        self.connection.commit()
 
     def close(self) -> None:
         self.connection.close()
@@ -53,9 +62,21 @@ class PriceStore:
 
     def has_day(self, day: date) -> bool:
         row = self.connection.execute(
-            "SELECT 1 FROM daily_prices WHERE day = ? LIMIT 1", (day.isoformat(),)
+            "SELECT 1 FROM downloaded_days WHERE day = ? LIMIT 1", (day.isoformat(),)
         ).fetchone()
         return row is not None
+
+    def latest_day(self) -> date | None:
+        row = self.connection.execute("SELECT MAX(day) FROM downloaded_days").fetchone()
+        return date.fromisoformat(row[0]) if row and row[0] else None
+
+    def mark_day_downloaded(self, day: date, bar_count: int) -> None:
+        self.connection.execute(
+            "INSERT INTO downloaded_days(day, bar_count) VALUES (?, ?) "
+            "ON CONFLICT(day) DO UPDATE SET bar_count=excluded.bar_count",
+            (day.isoformat(), bar_count),
+        )
+        self.connection.commit()
 
     def save(self, bars: Iterable[DailyBar]) -> int:
         rows = [
